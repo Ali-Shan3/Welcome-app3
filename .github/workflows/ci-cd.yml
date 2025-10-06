@@ -52,6 +52,7 @@ jobs:
               git clone https://github.com/${{ github.repository }} env-welcome
             fi
             cd env-welcome
+            git checkout develop
             git pull origin develop
             npm install
             pm2 delete env-welcome-dev || true
@@ -60,7 +61,7 @@ jobs:
           EOF
 
   # ================================
-  # 3. Deploy to Prod (Manual approval on main/master)
+  # 3. Deploy to Prod (Approval on main/master)
   # ================================
   deploy-prod:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -86,7 +87,8 @@ jobs:
               git clone https://github.com/${{ github.repository }} env-welcome
             fi
             cd env-welcome
-            git pull origin main
+            git checkout main || git checkout master
+            git pull origin $(git rev-parse --abbrev-ref HEAD)
             npm install
             pm2 delete env-welcome-prod || true
             ENV=${{ secrets.PROD_ENV }} PORT=${{ secrets.PROD_PORT }} pm2 start app.js --name env-welcome-prod
