@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   pull_request:
-    branches: [develop, main, product, feature/*]
+    branches: [develop, main, product]
   push:
     branches: [develop, main, product]
 
@@ -75,7 +75,9 @@ jobs:
     needs: pr-checks
     environment:
       name: production
-      url: http://${{ secrets.DEV_EC2_IP }}:${{ secrets.PROD_PORT }}
+      # ⚠️ GitHub doesn't allow secrets here
+      # Set the real URL manually in GitHub Environment settings
+      url: http://example.com
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
