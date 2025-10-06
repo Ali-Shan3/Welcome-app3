@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   pull_request:
-    branches: [develop, main, master]
+    branches: [develop, main, product]
   push:
-    branches: [develop, main, master]
+    branches: [develop, main, product]
 
 jobs:
   # ================================
@@ -45,31 +45,39 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Deploy to Dev EC2
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEV_EC2_IP: ${{ secrets.DEV_EC2_IP }}
+          DEV_ENV: ${{ secrets.DEV_ENV }}
+          DEV_PORT: ${{ secrets.DEV_PORT }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.DEV_EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$DEV_EC2_IP << EOF
             set -e
             if [ ! -d "env-welcome" ]; then
               git clone https://github.com/${{ github.repository }} env-welcome
             fi
             cd env-welcome
+            git fetch origin develop
             git checkout develop
-            git pull origin develop
+            git reset --hard origin/develop
             npm install
             pm2 delete env-welcome-dev || true
-            ENV=${{ secrets.DEV_ENV }} PORT=${{ secrets.DEV_PORT }} pm2 start app.js --name env-welcome-dev
+            ENV=$DEV_ENV PORT=$DEV_PORT pm2 start app.js --name env-welcome-dev
             pm2 save
           EOF
 
   # ================================
-  # 3. Deploy to Prod (Approval on main/master)
+  # 3. Deploy to Prod (Approval on main/product)
   # ================================
   deploy-prod:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/product'
     runs-on: ubuntu-latest
     needs: pr-checks
     environment:
       name: production
-      url: http://${{ secrets.DEV_EC2_IP }}:${{ secrets.PROD_PORT }}
+      # ⚠️ GitHub doesn't allow secrets here
+      # Set the real URL manually in GitHub Environment settings
+      url: http://example.com
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,17 +88,23 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Deploy to Prod EC2
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEV_EC2_IP: ${{ secrets.DEV_EC2_IP }}
+          PROD_ENV: ${{ secrets.PROD_ENV }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.DEV_EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$DEV_EC2_IP << EOF
             set -e
             if [ ! -d "env-welcome" ]; then
               git clone https://github.com/${{ github.repository }} env-welcome
             fi
             cd env-welcome
-            git checkout main || git checkout master
-            git pull origin $(git rev-parse --abbrev-ref HEAD)
+            git fetch origin main || git fetch origin product
+            git checkout main || git checkout product
+            git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
             npm install
             pm2 delete env-welcome-prod || true
-            ENV=${{ secrets.PROD_ENV }} PORT=${{ secrets.PROD_PORT }} pm2 start app.js --name env-welcome-prod
+            ENV=$PROD_ENV PORT=$PROD_PORT pm2 start app.js --name env-welcome-prod
             pm2 save
           EOF
