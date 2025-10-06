@@ -27,7 +27,7 @@ jobs:
 
       - name: Run tests
         run: npm test || echo "no test defined"
-        run: npm test || echo "no test define"
+       
 
   # ================================
   # 2. Deploy to Dev (Auto on develop branch)
