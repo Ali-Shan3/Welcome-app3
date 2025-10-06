@@ -45,8 +45,13 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Deploy to Dev EC2
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEV_EC2_IP: ${{ secrets.DEV_EC2_IP }}
+          DEV_ENV: ${{ secrets.DEV_ENV }}
+          DEV_PORT: ${{ secrets.DEV_PORT }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.DEV_EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$DEV_EC2_IP << EOF
             set -e
             if [ ! -d "env-welcome" ]; then
               git clone https://github.com/${{ github.repository }} env-welcome
@@ -57,7 +62,7 @@ jobs:
             git reset --hard origin/develop
             npm install
             pm2 delete env-welcome-dev || true
-            ENV=${{ secrets.DEV_ENV }} PORT=${{ secrets.DEV_PORT }} pm2 start app.js --name env-welcome-dev
+            ENV=$DEV_ENV PORT=$DEV_PORT pm2 start app.js --name env-welcome-dev
             pm2 save
           EOF
 
@@ -81,18 +86,23 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       - name: Deploy to Prod EC2
+        env:
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEV_EC2_IP: ${{ secrets.DEV_EC2_IP }}
+          PROD_ENV: ${{ secrets.PROD_ENV }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.DEV_EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$DEV_EC2_IP << EOF
             set -e
             if [ ! -d "env-welcome" ]; then
               git clone https://github.com/${{ github.repository }} env-welcome
             fi
             cd env-welcome
-            git fetch origin $(git rev-parse --abbrev-ref HEAD)
-            git checkout $(git rev-parse --abbrev-ref HEAD)
+            git fetch origin main || git fetch origin product
+            git checkout main || git checkout product
             git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
             npm install
             pm2 delete env-welcome-prod || true
-            ENV=${{ secrets.PROD_ENV }} PORT=${{ secrets.PROD_PORT }} pm2 start app.js --name env-welcome-prod
+            ENV=$PROD_ENV PORT=$PROD_PORT pm2 start app.js --name env-welcome-prod
             pm2 save
           EOF
