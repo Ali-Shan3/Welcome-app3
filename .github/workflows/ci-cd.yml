@@ -1,0 +1,94 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [develop, main, master]
+  push:
+    branches: [develop, main, master]
+
+jobs:
+  # ---------------------------
+  # 1. PR validation (CI only)
+  # ---------------------------
+  pr-checks:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  # ---------------------------
+  # 2. Deploy to Dev (auto)
+  # ---------------------------
+  deploy-dev:
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies & run tests
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy to Dev EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.DEV_EC2_IP }} << 'EOF'
+            cd ~/env-welcome
+            git fetch origin develop
+            git reset --hard origin/develop
+            npm install --production
+            ENV=dev PORT=3000 pm2 reload env-welcome-dev || ENV=dev PORT=3000 pm2 start app.js --name env-welcome-dev
+          EOF
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+  # ---------------------------
+  # 3. Deploy to Prod (manual approval)
+  # ---------------------------
+  deploy-prod:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: production   # requires approval in GitHub settings
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies & run tests
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy to Prod EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.PROD_EC2_IP }} << 'EOF'
+            cd ~/env-welcome
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --production
+            ENV=prod PORT=3001 pm2 reload env-welcome-prod || ENV=prod PORT=3001 pm2 start app.js --name env-welcome-prod
+          EOF
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
